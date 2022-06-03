@@ -1492,19 +1492,19 @@ static void cdc_ncm_txpath_bh(struct tasklet_struct *t)
 	struct cdc_ncm_ctx *ctx = from_tasklet(ctx, t, bh);
 	struct usbnet *dev = ctx->dev;
 
-	spin_lock_bh(&ctx->mtx);
+	spin_lock(&ctx->mtx);
 	if (ctx->tx_timer_pending != 0) {
 		ctx->tx_timer_pending--;
 		cdc_ncm_tx_timeout_start(ctx);
-		spin_unlock_bh(&ctx->mtx);
+		spin_unlock(&ctx->mtx);
 	} else if (dev->net != NULL) {
 		ctx->tx_reason_timeout++;	/* count reason for transmitting */
-		spin_unlock_bh(&ctx->mtx);
+		spin_unlock(&ctx->mtx);
 		netif_tx_lock_bh(dev->net);
 		usbnet_start_xmit(NULL, dev->net);
 		netif_tx_unlock_bh(dev->net);
 	} else {
-		spin_unlock_bh(&ctx->mtx);
+		spin_unlock(&ctx->mtx);
 	}
 }
 
@@ -1715,10 +1715,10 @@ int cdc_ncm_rx_fixup(struct usbnet *dev, struct sk_buff *skb_in)
 {
 	struct sk_buff *skb;
 	struct cdc_ncm_ctx *ctx = (struct cdc_ncm_ctx *)dev->data[0];
-	int len;
+	unsigned int len;
 	int nframes;
 	int x;
-	int offset;
+	unsigned int offset;
 	union {
 		struct usb_cdc_ncm_ndp16 *ndp16;
 		struct usb_cdc_ncm_ndp32 *ndp32;
@@ -1790,8 +1790,8 @@ next_ndp:
 			break;
 		}
 
-		/* sanity checking */
-		if (((offset + len) > skb_in->len) ||
+		/* sanity checking - watch out for integer wrap*/
+		if ((offset > skb_in->len) || (len > skb_in->len - offset) ||
 				(len > ctx->rx_max) || (len < ETH_HLEN)) {
 			netif_dbg(dev, rx_err, dev->net,
 				  "invalid frame detected (ignored) offset[%u]=%u, length=%u, skb=%p\n",
